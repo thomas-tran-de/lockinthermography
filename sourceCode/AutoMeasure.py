@@ -2,10 +2,6 @@ import pyautogui as augui
 import time
 import os
 from logging import getLogger
-from sourceCode.StepperMotor import rotationMotor
-import sys
-sys.path.append('../hardwareinterfaces')
-from AutoHeatStageProgram import AutoHeatStageProgram
 
 
 class AutoMeasure():
@@ -232,10 +228,7 @@ class AutoMeasure():
                     self.Sentinel.warning('Couldn\'t determine time unit')
 
         # edit drop periods
-        augui.hotkey('shift', 'tab') #@Thomas: Musste das hier ändern, weil der bei mir die Drop Periods nicht mehr eingetragen hat.
-        # for i in range(3):
-        #     augui.hotkey('shift', 'tab')
-        #     time.sleep(0.05)
+        augui.hotkey('shift', 'tab')
         augui.typewrite(str(skipPeriods))
         time.sleep(0.05)
         self.measTime += (skipPeriods / lockInFrequency)
@@ -244,7 +237,6 @@ class AutoMeasure():
             for i in range(6):
                 augui.hotkey('tab')
             augui.typewrite(str(dutyCycle))
-        # self.sublime.maximize()
         self.Sentinel.info('AutoGUI operations are done until Sublime is '
                            'minimized again.')
         self.Sentinel.info('measure time: ' + str(self.measTime))
@@ -389,93 +381,3 @@ class AutoMeasure():
         self.Sentinel.info('AutoGUI operations are done until Sublime is '
                            'minimized again.')
         self.Sentinel.info('Data file creation finished!')
-
-    def rotateMeasure(self, startAngle, angleStep, numberOfSteps, motorPort):
-        """
-        Starts a series of IRBIS measurements at different laser orientations.
-        The laser is rotated with the motor by the selected angle.
-
-        Parameters
-        ----------
-        startAngle : int
-            Angle from starting orientation of the laser to zero position.
-        angleStep : int
-            Laser rotation angle between two measurements.
-        numberOfSteps : int
-            Specifies how often the laser is rotated. This equals the number
-            of IRBIS measurements in the series minus the first measurement.
-        motorPort : string
-            COM port of the Arduino motor (check device manager in windows).
-        """
-        # do the first measurement
-        motor = rotationMotor(motorPort)
-        motor.rotate(startAngle)
-        self.startMeasurement()
-        self.fileCheck()
-
-        # do the subsequent measurements
-        for i in range(numberOfSteps):
-            motor.rotate(angleStep)
-            self.startMeasurement()
-            self.fileCheck()
-
-        self.Sentinel.info('Measurement series finished!')
-        motor.reset()
-
-    def heatingMeasure(self, startTemperature, temperatureStep, numberOfSteps, measurementsPerTemp=1, equilTime=600):
-        """
-        Starts a series of IRBIS measurements at different temperatures using
-        the heat stage. The heat stage must be connected via USB and the heat
-        stage control program WinTemp must be running.
-
-        Time dependent temperature during the equilibration will be saved
-        at the path fileName_measureCount_Temp_target_EquilData.xlsx.
-        Time dependent temperature during the measurement(s) will be saved
-        at the path fileName_measureCount_Temp_target_MeasData.xlsx.
-        In the position of 'measureCount' and 'target' will be the number of
-        the measurment and the target temperature as 4 digit number.
-
-        Parameters
-        ----------
-        startTemperature : float
-            Start temperature in degree Celsius.
-        temperatureStep : float
-            Temperature step between two measurements in degree Celsius.
-        numberOfSteps : int
-            Specifies how many heating steps are made. This equals the number
-            of IRBIS measurements in the series minus the first measurement.
-        measurementsPerTemp : int, optional
-            Number of measurements per temperature level. Default is 1.
-        equilTime : int, optional
-            Waiting time in seconds for reaching the target temperature.
-            Default is 600 s.
-        """
-        heater = AutoHeatStageProgram()
-        target = startTemperature
-        self.fileName += '_XXXX_Temp_XXXX'
-        for i in range(numberOfSteps + 1):
-
-            # write temperature level and measureCount into fileName
-            self.fileName = self.fileName[:-14] + '{:04d}'.format(
-                self.measureCount) + '_Temp_{:04d}'.format(target)
-
-            # start heating, wait for equilibration and record the temperature
-            heater.EquilToTemp(target, equilTime, self.fileName)
-            self.Sentinel.info('Temperature equilibration data saved.')
-
-            # start recording the temperature during the measurement(s)
-            fileTime = heater.recordData(self.fileName + '_MeasData')
-
-            # do the measurement(s)
-            for i in range(measurementsPerTemp):
-                self.startMeasurement()
-                self.fileCheck()
-            target += temperatureStep
-
-            # save the measurement temperature data
-            heater.saveData()
-            heater.xls_to_xlsx(self.fileName + '_MeasData', fileTime)
-            self.Sentinel.info('Measurement temperature data saved.')
-
-        self.Sentinel.info('Measurement series finished!')
-        heater.stop()
